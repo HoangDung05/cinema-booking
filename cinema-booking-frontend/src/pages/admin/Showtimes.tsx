@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { movieService, type MovieDto } from '../../services/movieService';
 import { roomService, type RoomDto } from '../../services/roomService';
 import { showtimeService, type ShowtimeDto, type ShowtimeWritePayload, type SeatStatusDTO } from '../../services/showtimeService';
@@ -47,6 +47,13 @@ function toInputDateTime(value: string) {
   if (Number.isNaN(date.getTime())) return '';
   const tzOffsetMs = date.getTimezoneOffset() * 60 * 1000;
   return new Date(date.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+}
+
+function isShowtimeOnDate(startTime: string, selectedDate: string) {
+  const date = new Date(startTime);
+  if (Number.isNaN(date.getTime())) return false;
+  const tzOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - tzOffsetMs).toISOString().slice(0, 10) === selectedDate;
 }
 
 function calcEndTime(startTime: string, durationMinutes: number) {
@@ -132,6 +139,7 @@ function renderAdminSeat(seatObj: SeatStatusDTO | undefined, seatNumberString: s
 }
 
 export default function Showtimes() {
+  const loadRequestId = useRef(0);
   const [rows, setRows] = useState<ShowtimeRow[]>([]);
   const [movies, setMovies] = useState<MovieDto[]>([]);
   const [rooms, setRooms] = useState<RoomDto[]>([]);
@@ -168,6 +176,7 @@ export default function Showtimes() {
   };
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoadError('');
     setLoading(true);
     try {
@@ -177,8 +186,13 @@ export default function Showtimes() {
         roomService.getAllRooms(),
       ]);
       const mapped = showtimeList.map(fromApi);
-      const seatStats = await Promise.all(
-        mapped.map(async (row) => {
+      const visibleRows = mapped.filter((row) => isShowtimeOnDate(row.startTime, selectedDate));
+      const seatStats: Pick<ShowtimeRow, 'id' | 'totalSeats' | 'soldSeats' | 'seats'>[] = [];
+
+      // Chỉ lấy ghế cho ngày đang xem và giới hạn số request đồng thời tới backend.
+      for (let index = 0; index < visibleRows.length; index += 2) {
+        if (requestId !== loadRequestId.current) return;
+        const batch = await Promise.all(visibleRows.slice(index, index + 2).map(async (row) => {
           try {
             const seats = await showtimeService.getSeatsByShowtimeId(row.id);
             const totalSeats = seats.length;
@@ -187,8 +201,10 @@ export default function Showtimes() {
           } catch {
             return { id: row.id, totalSeats: 0, soldSeats: 0, seats: [] };
           }
-        })
-      );
+        }));
+        seatStats.push(...batch);
+      }
+      if (requestId !== loadRequestId.current) return;
       const statsMap = new Map(seatStats.map((s) => [s.id, s]));
       setRows(
         mapped.map((row) => {
@@ -206,12 +222,14 @@ export default function Showtimes() {
         [...roomList].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi', { sensitivity: 'base' }))
       );
     } catch (e) {
-      console.error(e);
-      setLoadError('Không tải được dữ liệu suất chiếu. Kiểm tra backend và đăng nhập admin.');
+      if (requestId === loadRequestId.current) {
+        console.error(e);
+        setLoadError('Không tải được dữ liệu suất chiếu. Kiểm tra backend và đăng nhập admin.');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     void loadData();
@@ -219,13 +237,7 @@ export default function Showtimes() {
 
   // Filter rows by selected Date
   const filteredRowsByDate = useMemo(() => {
-     return rows.filter(r => {
-        const d = new Date(r.startTime);
-        if (Number.isNaN(d.getTime())) return false;
-        const tzOffsetMs = d.getTimezoneOffset() * 60 * 1000;
-        const dateStr = new Date(d.getTime() - tzOffsetMs).toISOString().split('T')[0];
-        return dateStr === selectedDate;
-     });
+     return rows.filter(r => isShowtimeOnDate(r.startTime, selectedDate));
   }, [rows, selectedDate]);
 
   // Group by Room
