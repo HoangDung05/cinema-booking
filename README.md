@@ -104,7 +104,7 @@ npm ci
 npm run dev
 ```
 
-Mở `http://localhost:3000`. Frontend hiện gọi API cố định tại `http://localhost:8080/api` trong `src/services/apiClient.ts` và `src/services/chatbotService.ts`, nên cần chạy backend ở cổng 8080 khi dùng cấu hình mặc định.
+Mở `http://localhost:3000`. Frontend dùng `VITE_API_URL` làm base URL cho cả API chính và chatbot; mặc định là `http://localhost:8080/api` khi chạy local. Khi deploy trên Vercel, đặt `VITE_API_URL` thành URL backend Railway có `/api` ở cuối, ví dụ `https://backend.example.up.railway.app/api`. Đây là biến công khai được Vite đưa vào bản build, không đặt mật khẩu hoặc API key trong biến `VITE_`. Sau khi đổi biến trên Vercel, cần redeploy để tạo bản build mới.
 
 ## Chạy bằng Docker Compose
 

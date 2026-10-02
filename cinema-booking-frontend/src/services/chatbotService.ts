@@ -1,8 +1,9 @@
 import axios from 'axios';
+import { API_BASE_URL } from './apiBaseUrl';
 
 // Instance riêng cho chatbot - không đính kèm JWT để tránh lỗi 401 khi token hết hạn
 const chatAxios = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' }
 });
 

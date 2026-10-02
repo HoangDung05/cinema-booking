@@ -1,8 +1,9 @@
 import axios, { AxiosHeaders } from 'axios';
 import { CURRENT_USER_STORAGE_KEY } from '../utils/authSession';
+import { API_BASE_URL } from './apiBaseUrl';
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8080/api', // Đường dẫn tới Backend Spring Boot
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
