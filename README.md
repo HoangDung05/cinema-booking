@@ -170,6 +170,7 @@ Xem toàn bộ endpoint và cấu trúc request/response trong Swagger UI. Các 
 ## Cấu hình và lưu ý
 
 - Cổng backend, context path và kết nối MySQL nằm trong `cinema-booking-backend/src/main/resources/application.yaml`.
+- Backend đọc `CORS_ALLOWED_ORIGINS` dưới dạng danh sách origin cách nhau bằng dấu phẩy. Mặc định chỉ cho phép frontend local. Khi có domain Vercel, đặt biến này trong **Variables** của service Backend trên Railway, ví dụ `https://ten-du-an.vercel.app` (không thêm `/api` hoặc dấu `/` cuối); nếu cần nhiều origin, phân tách bằng dấu phẩy. Frontend gửi JWT qua header `Authorization`, không dùng cookie.
 - Chatbot đọc khóa Gemini từ biến môi trường `GEMINI_API_KEY`. Khi chưa có khóa, các phần khác vẫn chạy và chatbot trả thông báo chưa được cấu hình. Khóa từng có trong mã nguồn cần được thu hồi trước khi triển khai công khai.
 - Cấu hình tài khoản MySQL trong dự án dành cho môi trường phát triển. Hãy đổi thông tin đăng nhập và cấu hình bảo mật trước khi triển khai công khai.
 - Dữ liệu mẫu trong `init.sql` có các suất chiếu theo ngày cố định; nếu không còn suất chiếu sắp tới, hãy tạo suất chiếu mới trong trang quản trị.

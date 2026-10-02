@@ -6,7 +6,6 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Bật nếu dùng cookie, session hoặc JWT trong HttpOnly cookie
 });
 
 // Interceptor cho Request (ví dụ muốn đính kèm JWT Token)
