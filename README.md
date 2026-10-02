@@ -165,7 +165,7 @@ Tất cả đường dẫn bên dưới có tiền tố `/api`:
 | Quản trị | `/admin/stats`, `/admin/movies`, `/admin/showtimes`, `/admin/users`, `/admin/vouchers` |
 | Chatbot | `POST /chat` |
 
-Xem toàn bộ endpoint và cấu trúc request/response trong Swagger UI. Các API yêu cầu đăng nhập sử dụng JWT dạng `Authorization: Bearer <token>`. Quyền truy cập được khai báo trong `SecurityConfig`; hiện một số endpoint `/admin` (như voucher và danh sách vé) đang được cho phép truy cập công khai, cần rà soát trước khi triển khai thực tế.
+Xem toàn bộ endpoint và cấu trúc request/response trong Swagger UI. Các API yêu cầu đăng nhập sử dụng JWT dạng `Authorization: Bearer <token>`. Quyền truy cập được khai báo trong `SecurityConfig`; các API quản trị và thao tác ghi phim/phòng/voucher yêu cầu quyền ADMIN. Thanh toán hiện chỉ là luồng mô phỏng để trình diễn, chưa tích hợp cổng thanh toán thật.
 
 ## Cấu hình và lưu ý
 
