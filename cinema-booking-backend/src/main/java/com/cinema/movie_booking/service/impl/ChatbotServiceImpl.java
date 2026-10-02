@@ -31,11 +31,15 @@ public class ChatbotServiceImpl implements ChatbotService {
     private final MovieRepository movieRepository;
     private final ShowtimeService showtimeService;
 
-    @Value("${gemini.api.key:AIzaSyCuwAxoXh6-Rnp2ZiDnZTn5EKxxMqNT7-Y}")
+    @Value("${GEMINI_API_KEY:}")
     private String geminiApiKey;
 
     @Override
     public String getChatbotResponse(ChatRequestDTO request) {
+        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+            return "Chatbot chưa được cấu hình khóa Gemini.";
+        }
+
         String systemContext = buildSystemContext();
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + geminiApiKey;

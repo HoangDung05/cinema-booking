@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 export default function BookingSuccess() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { bookingResult, booking, selectedSeats, priceData } = location.state || {};
+  const { bookingResult, booking, selectedSeats } = location.state || {};
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });

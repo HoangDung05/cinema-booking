@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+
+**/target/
+**/dist/
+**/node_modules/
+**/build/
+
+.idea/
+.vscode/
+*.log
+cinema-booking-backend/error.txt
+cinema-booking-backend/error_response.json

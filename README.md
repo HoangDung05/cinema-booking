@@ -20,6 +20,7 @@ cinema-booking/
 ├── cinema-booking-frontend/  # Ứng dụng React/Vite
 ├── docker-compose.yml        # MySQL, backend, frontend
 ├── init.sql                  # Cấu trúc và dữ liệu mẫu MySQL
+├── railway_demo.sql          # Schema và dữ liệu giả lập an toàn cho Railway
 └── README.md
 ```
 
@@ -43,13 +44,15 @@ Sau khi import dữ liệu mẫu từ `init.sql`, bạn có thể đăng nhập 
 
 Các tài khoản này chỉ dùng để thử nghiệm; hãy đổi mật khẩu hoặc xóa chúng trước khi triển khai công khai.
 
+`railway_demo.sql` không tạo tài khoản nào. Hai tài khoản trên chỉ có trong dữ liệu local từ `init.sql`.
+
 ## Chạy trực tiếp trên máy (không dùng Docker)
 
 ### Yêu cầu
 
 - JDK 21 và Node.js 20 trở lên.
 - MySQL 8 đang chạy ở `localhost:3306`.
-- Tài khoản MySQL có quyền sử dụng database `cinema_booking`. Cấu hình mặc định trong `cinema-booking-backend/src/main/resources/application.yaml` là `root` / `root`; sửa file này hoặc đặt các biến môi trường `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` cho phù hợp với máy của bạn.
+- Tài khoản MySQL có quyền sử dụng database `cinema_booking`. Backend đọc kết nối qua `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`; khóa ký JWT qua `JWT_SECRET`.
 
 ### 1. Chuẩn bị database
 
@@ -65,14 +68,29 @@ Thay đường dẫn `SOURCE` nếu dự án nằm ở vị trí khác. File SQL
 
 ### 2. Chạy backend
 
+Để kiểm tra và đóng gói backend, chạy trong `cinema-booking-backend`:
+
+```powershell
+.\mvnw.cmd clean package
+```
+
+Bài test dùng database H2 tạm, nên lệnh build này không cần MySQL hoặc file `.env`. File WAR được tạo trong `target/`. Khi **chạy ứng dụng thật**, backend vẫn cần `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` và `JWT_SECRET`.
+
 Mở PowerShell tại thư mục gốc dự án:
 
 ```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Điền DB_PASSWORD và JWT_SECRET vào .env trước lần chạy đầu tiên.
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^([A-Z_][A-Z0-9_]*)=(.*)$') {
+        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+    }
+}
 cd .\cinema-booking-backend
 .\mvnw.cmd spring-boot:run
 ```
 
-Hoặc mở dự án backend trong IDE và chạy class `com.cinema.movie_booking.MovieBookingApplication`. Trên macOS/Linux, dùng `./mvnw spring-boot:run`.
+Thay `DB_USERNAME` và `DB_PASSWORD` trong `.env` theo MySQL trên máy. `JWT_SECRET` cần tối thiểu 64 byte UTF-8; tạo một khóa ngẫu nhiên một lần và giữ nguyên để JWT không mất hiệu lực sau mỗi lần chạy. Spring Boot không tự đọc `.env`, vì vậy terminal phải nạp file như trên. Nếu chạy từ IntelliJ IDEA, chọn file `.env` trong **Run → Edit Configurations → Environment variables** rồi chạy class `com.cinema.movie_booking.MovieBookingApplication`. Trên macOS/Linux, dùng `./mvnw spring-boot:run` sau khi export các biến tương ứng.
 
 Backend chạy tại `http://localhost:8080/api`. Thử `http://localhost:8080/api/movies`; Swagger UI ở `http://localhost:8080/api/swagger-ui.html`.
 
@@ -93,6 +111,8 @@ Mở `http://localhost:3000`. Frontend hiện gọi API cố định tại `http
 Cần cài Docker Desktop (hoặc Docker Engine với Compose) và khởi động Docker trước. Tại thư mục gốc dự án:
 
 ```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Điền MYSQL_ROOT_PASSWORD và JWT_SECRET vào .env trước khi chạy.
 docker compose up -d --build
 docker compose ps
 ```
@@ -104,7 +124,32 @@ docker compose ps
 | Swagger UI | `http://localhost:8080/api/swagger-ui.html` |
 | MySQL | `localhost:3307` (trong container: `db:3306`) |
 
-Compose dùng MySQL `root` / `root` và tự import `init.sql` **chỉ khi volume MySQL được khởi tạo lần đầu**. Dừng các container bằng `docker compose down`. Nếu cần xóa toàn bộ dữ liệu trong volume và import lại từ đầu, chạy `docker compose down -v` rồi `docker compose up -d --build`.
+Compose dùng tài khoản MySQL `root` với mật khẩu lấy từ `.env` và tự import `init.sql` **chỉ khi volume MySQL được khởi tạo lần đầu**. `.env` đã được Git bỏ qua; không commit file này. Dừng các container bằng `docker compose down`. Nếu cần xóa toàn bộ dữ liệu trong volume và import lại từ đầu, chạy `docker compose down -v` rồi `docker compose up -d --build`.
+
+## Nạp dữ liệu demo vào MySQL trên Railway
+
+Chỉ dùng [railway_demo.sql](railway_demo.sql) cho **database Railway mới, trống**. File này tạo 11 bảng và dữ liệu giả lập: 3 phim, 1 rạp, 3 phòng, 144 ghế, 3 suất chiếu/ngày trong 365 ngày tính từ ngày import. Bảng `users`, `bookings` và `payments` ban đầu trống. Không import `init.sql` lên Railway vì file local đó chứa thông tin người dùng, lịch sử vé và lịch chiếu cũ.
+
+1. Trong Railway, mở service **MySQL → Variables**. Kiểm tra có `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`. Không sao chép giá trị bí mật vào Git hoặc tin nhắn.
+2. Vào **Settings → Networking**, thêm **Public Access** cho MySQL. Railway tạo `MYSQL_PUBLIC_URL` với host và cổng TCP công khai. Dùng host/cổng trong URL đó cho kết nối từ máy tính; `MYSQLHOST`/`MYSQLPORT` nội bộ chỉ dùng giữa các service Railway.
+3. Mở MySQL Workbench, tạo kết nối mới kiểu **Standard (TCP/IP)**. Điền hostname và port từ `MYSQL_PUBLIC_URL`, username từ `MYSQLUSER`, password từ `MYSQLPASSWORD`, **Default Schema** là `MYSQLDATABASE`. Bấm **Test Connection**.
+4. Mở [railway_demo.sql](railway_demo.sql) bằng **File → Open SQL Script**. Chọn `MYSQLDATABASE` làm schema mặc định, rồi chạy toàn bộ script. Chỉ chạy một lần; file dùng ID cố định để các bảng liên kết đúng.
+5. Trong Workbench, chạy truy vấn kiểm tra:
+
+   ```sql
+   SELECT (SELECT COUNT(*) FROM movies) AS movies,
+          (SELECT COUNT(*) FROM rooms) AS rooms,
+          (SELECT COUNT(*) FROM seats) AS seats,
+          (SELECT COUNT(*) FROM showtimes) AS showtimes,
+          (SELECT COUNT(*) FROM users) AS users,
+          (SELECT COUNT(*) FROM bookings) AS bookings;
+   SELECT MIN(start_time), MAX(start_time) FROM showtimes;
+   ```
+
+   Kết quả mong đợi: `3` phim, `3` phòng, `144` ghế, `1095` suất chiếu, `0` người dùng, `0` đơn đặt vé. Ngày cuối của lịch chiếu phải ở tương lai.
+6. Sau khi kiểm tra, trở lại **MySQL → Settings → Networking** và xóa **Public Access** của database. Backend Railway sẽ kết nối qua mạng nội bộ ở giai đoạn tiếp theo.
+
+Nếu Workbench báo lỗi, giữ nguyên log lỗi và dòng SQL gây lỗi để kiểm tra; không chạy lại toàn bộ file trên database đã import một phần.
 
 ## API chính
 
@@ -125,7 +170,7 @@ Xem toàn bộ endpoint và cấu trúc request/response trong Swagger UI. Các 
 ## Cấu hình và lưu ý
 
 - Cổng backend, context path và kết nối MySQL nằm trong `cinema-booking-backend/src/main/resources/application.yaml`.
-- Chatbot sử dụng khóa Gemini qua cấu hình backend `gemini.api.key`. `ChatbotServiceImpl` hiện có khóa mặc định trong mã nguồn; hãy thay bằng cấu hình an toàn và thu hồi khóa cũ trước khi triển khai công khai.
+- Chatbot đọc khóa Gemini từ biến môi trường `GEMINI_API_KEY`. Khi chưa có khóa, các phần khác vẫn chạy và chatbot trả thông báo chưa được cấu hình. Khóa từng có trong mã nguồn cần được thu hồi trước khi triển khai công khai.
 - Cấu hình tài khoản MySQL trong dự án dành cho môi trường phát triển. Hãy đổi thông tin đăng nhập và cấu hình bảo mật trước khi triển khai công khai.
 - Dữ liệu mẫu trong `init.sql` có các suất chiếu theo ngày cố định; nếu không còn suất chiếu sắp tới, hãy tạo suất chiếu mới trong trang quản trị.
 - Nếu gặp lỗi cổng 8080 hoặc 3000 đã được sử dụng, hãy dừng tiến trình đang dùng cổng đó trước khi chạy lại. Khi chạy Docker, cổng 80 và 3307 cũng cần còn trống.

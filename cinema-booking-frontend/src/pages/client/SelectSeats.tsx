@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { SeatStatusDTO, showtimeService } from '../../services/showtimeService';
 import { bookingService } from '../../services/bookingService';
-import { useNavigate } from 'react-router-dom';
 
 const ROWS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 

@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingService, PriceCalculateResponse } from '../../services/bookingService';
 import { voucherService, VoucherDTO } from '../../services/voucherService';
 import { CURRENT_USER_STORAGE_KEY, AuthSession } from '../../utils/authSession';
@@ -61,11 +61,6 @@ export default function Checkout() {
     }
   };
 
-  const handleApplyPromo = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    calculateInitialPrice(promoCode);
-  };
-
   const handleOpenVouchers = async () => {
     setIsVoucherModalOpen(true);
     if (vouchers.length === 0) {
@@ -106,7 +101,7 @@ export default function Checkout() {
       });
       navigate('/booking-success', { 
         replace: true,
-        state: { bookingResult: resp, booking, selectedSeats, priceData }
+        state: { bookingResult: resp, booking, selectedSeats }
       });
     } catch (error: any) {
       setErrorMsg(error.response?.data || "Thanh toán thất bại! Vui lòng thử lại sau.");

@@ -16,6 +16,4 @@ public interface ShowtimeRepository extends JpaRepository<Showtime, Integer> {
         // Giúp khách hàng không thấy các suất đã chiếu xong
         List<Showtime> findByMovieIdAndStartTimeAfterOrderByStartTimeAsc(Integer movieId, LocalDateTime now);
 
-        // 2. Tìm tất cả suất chiếu trong một khoảng ngày nhất định (cho Admin quản lý)
-        List<Showtime> findByStartTimeBetween(LocalDateTime start, LocalDateTime end);
 }

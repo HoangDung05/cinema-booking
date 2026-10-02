@@ -9,9 +9,6 @@ import java.util.List;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
-    // Lấy đơn hàng theo User (cho khách xem lịch sử)
-    List<Booking> findByUserId(Integer userId);
-
     // Lấy đơn hàng theo email User
     List<Booking> findByUserEmail(String email);
 

@@ -24,11 +24,6 @@ export const voucherService = {
     return res.data;
   },
 
-  getMyVouchers: async (email: string): Promise<unknown[]> => {
-    const res = await apiClient.get(`/users/me/vouchers?email=${encodeURIComponent(email)}`);
-    return res.data;
-  },
-
   getAll: async (): Promise<VoucherDto[]> => {
     const res = await apiClient.get('/vouchers/all');
     return res.data;

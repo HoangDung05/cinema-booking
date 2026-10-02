@@ -9,13 +9,6 @@ export default function Chatbot() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [systemContext, setSystemContext] = useState('');
-
-  useEffect(() => {
-    // Tải ngữ cảnh AI từ service
-    chatbotService.getSystemContext().then(setSystemContext);
-  }, []);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
@@ -29,7 +22,7 @@ export default function Chatbot() {
     setIsLoading(true);
 
     try {
-      const aiReply = await chatbotService.sendMessage(userMessage, messages, systemContext);
+      const aiReply = await chatbotService.sendMessage(userMessage, messages);
       setMessages(prev => [...prev, { role: 'model', text: aiReply }]);
     } catch (error: any) {
       console.error(error);

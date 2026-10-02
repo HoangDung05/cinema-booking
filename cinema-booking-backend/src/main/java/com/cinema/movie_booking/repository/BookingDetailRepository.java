@@ -14,13 +14,5 @@ public interface BookingDetailRepository extends JpaRepository<BookingDetail, In
     // Lấy chi tiết các ghế đã đặt của 1 đơn hàng cụ thể
     List<BookingDetail> findByBookingId(Integer bookingId);
 
-    // Lấy danh sách ID các ghế đã được đặt cho một suất chiếu
-    @org.springframework.data.jpa.repository.Query("SELECT bd.seat.id FROM BookingDetail bd WHERE bd.showtime.id = :showtimeId AND bd.booking.status <> 'CANCELLED'")
-    List<Integer> findBookedSeatIdsByShowtimeId(
-            @org.springframework.data.repository.query.Param("showtimeId") Integer showtimeId);
-
     List<BookingDetail> findByShowtimeId(Integer showtimeId);
-
-    @org.springframework.data.jpa.repository.Query("SELECT CASE WHEN COUNT(bd) > 0 THEN true ELSE false END FROM BookingDetail bd WHERE bd.showtime.id = :showtimeId AND bd.seat.id = :seatId AND bd.booking.status <> 'CANCELLED'")
-    boolean existsByShowtimeIdAndSeatId(@org.springframework.data.repository.query.Param("showtimeId") Integer showtimeId, @org.springframework.data.repository.query.Param("seatId") Integer seatId);
 }

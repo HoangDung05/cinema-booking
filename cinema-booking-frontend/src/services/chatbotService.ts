@@ -1,4 +1,3 @@
-import apiClient from './apiClient';
 import axios from 'axios';
 
 // Instance riêng cho chatbot - không đính kèm JWT để tránh lỗi 401 khi token hết hạn
@@ -11,17 +10,9 @@ export type ChatMessage = { role: 'user' | 'model'; text: string };
 
 export const chatbotService = {
   /**
-   * Phương thức getSystemContext không còn cần thiết ở Frontend
-   * vì Backend sẽ tự động xử lý (RAG) và chèn vào prompt.
-   */
-  getSystemContext: async (): Promise<string> => {
-    return ''; // Không cần dùng nữa
-  },
-
-  /**
    * Gửi tin nhắn đến API Backend (/api/chat) và nhận về câu trả lời
    */
-  sendMessage: async (userMessage: string, chatHistory: ChatMessage[], systemContext: string): Promise<string> => {
+  sendMessage: async (userMessage: string, chatHistory: ChatMessage[]): Promise<string> => {
     try {
       // Dùng chatAxios (không có JWT) để endpoint /chat public hoạt động được
       const response = await chatAxios.post('/chat', {

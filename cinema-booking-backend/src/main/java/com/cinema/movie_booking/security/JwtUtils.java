@@ -1,19 +1,28 @@
 package com.cinema.movie_booking.security;
 
 import io.jsonwebtoken.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.security.Key;
 import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtUtils {
-    // Chìa khóa bí mật (Thực tế nên để trong application.properties)
-    private final String jwtSecret = "CinemaTicketBookingSecretKeyMustBeLongEnough12345678901234567890"; // changed to >= 64 bytes
+    private final Key signingKey;
     private final int jwtExpirationMs = 86400000; // 1 ngày
 
+    public JwtUtils(@Value("${JWT_SECRET}") String jwtSecret) {
+        byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 64) {
+            throw new IllegalArgumentException("JWT_SECRET phải có ít nhất 64 byte UTF-8 để ký HS512");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(secretBytes);
+    }
+
     private Key key() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        return signingKey;
     }
 
     // Tạo Token khi Login thành công
