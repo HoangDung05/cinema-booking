@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -274,7 +275,9 @@ public class BookingServiceImpl implements BookingService {
                     b.getDiscountAmount(),
                     b.getStatus(),
                     String.join(", ", seatNames),
-                    b.getCreatedAt()
+                    b.getCreatedAt() == null
+                            ? null
+                            : b.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
             ));
         }
         return result;

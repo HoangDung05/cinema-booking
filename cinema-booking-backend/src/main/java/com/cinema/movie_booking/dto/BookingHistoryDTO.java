@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @AllArgsConstructor
@@ -20,6 +21,6 @@ public class BookingHistoryDTO {
     private BigDecimal discountAmount;
     private String status;
     private String seatNames; // VD: "A1, A2"
-    /** Thời điểm tạo đơn — dùng cho đếm ngược thanh toán khi PENDING */
-    private LocalDateTime bookingCreatedAt;
+    /** Thời điểm tạo đơn có offset — trình duyệt dùng để đếm ngược PENDING chính xác */
+    private OffsetDateTime bookingCreatedAt;
 }

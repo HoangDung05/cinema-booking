@@ -213,7 +213,7 @@ export default function MyTickets() {
         <div>
           <h1 className="text-3xl font-headline font-bold text-on-surface mb-2">Vé của tôi</h1>
           <p className="text-on-surface-variant">
-            Sắp chiếu: vé còn hiệu lực và suất chưa chiếu. Lịch sử: suất đã chiếu và vé đã hủy / hết hạn thanh toán.
+            Sắp chiếu: vé chưa tới giờ chiếu và đơn đang giữ ghế trong 2 phút. Lịch sử: suất đã chiếu, vé đã hủy hoặc hết hạn thanh toán.
           </p>
         </div>
 
