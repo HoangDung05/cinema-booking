@@ -3,7 +3,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import { readAuthSession, isAdminSession } from '../utils/authSession';
 
 /**
- * Chỉ cho phép user đã đăng nhập và role_id = 2 (admin) vào /admin/*.
+ * Điều hướng UI theo role name; backend vẫn kiểm tra ROLE_ADMIN cho mọi API.
  */
 export default function AdminRoute() {
   const session = readAuthSession();

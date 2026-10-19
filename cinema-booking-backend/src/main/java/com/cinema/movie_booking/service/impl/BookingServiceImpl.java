@@ -8,11 +8,16 @@ import com.cinema.movie_booking.dto.PriceCalculateRequest;
 import com.cinema.movie_booking.dto.PriceCalculateResponse;
 import com.cinema.movie_booking.service.BookingService;
 import com.cinema.movie_booking.service.PendingBookingExpirationService;
+import com.cinema.movie_booking.security.GuestBookingProofService;
+import com.cinema.movie_booking.web.ApiException;
 import com.cinema.movie_booking.entity.*;
 import com.cinema.movie_booking.repository.*;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +42,65 @@ public class BookingServiceImpl implements BookingService {
     private final SeatRepository seatRepository;
     private final PaymentRepository paymentRepository;
     private final PendingBookingExpirationService pendingBookingExpirationService;
+    private final GuestBookingProofService guestBookingProofService;
+
+    private record SeatSelection(Showtime showtime, List<Seat> seats) {}
+
+    private SeatSelection validateSelection(Integer showtimeId, List<Integer> seatIds) {
+        if (showtimeId == null || showtimeId <= 0 || seatIds == null
+                || seatIds.isEmpty() || seatIds.size() > 10
+                || seatIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_SEATS", "Select 1 to 10 valid seats.");
+        }
+        if (new HashSet<>(seatIds).size() != seatIds.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DUPLICATE_SEATS", "Seat IDs must be distinct.");
+        }
+
+        Showtime showtime = showtimeRepository.findById(showtimeId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SHOWTIME_NOT_FOUND", "Showtime not found."));
+        if (showtime.getStartTime() == null || !showtime.getStartTime().isAfter(LocalDateTime.now())
+                || showtime.getMovie().getStatus() == MovieStatus.ENDED
+                || showtime.getPrice() == null || showtime.getPrice().signum() <= 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "SHOWTIME_UNAVAILABLE", "Showtime is unavailable.");
+        }
+
+        List<Seat> seats = new ArrayList<>();
+        seatRepository.findAllById(seatIds).forEach(seats::add);
+        if (seats.size() != seatIds.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_SEATS", "One or more seats do not exist.");
+        }
+        Integer roomId = showtime.getRoom().getId();
+        if (seats.stream().anyMatch(seat -> !roomId.equals(seat.getRoom().getId()))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SEAT_ROOM_MISMATCH",
+                    "Every seat must belong to the showtime room.");
+        }
+        return new SeatSelection(showtime, seats);
+    }
+
+    private boolean isSignedIn(Authentication authentication) {
+        return authentication != null && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken);
+    }
+
+    private void authorizeBooking(Booking booking, Authentication authentication, String guestProof) {
+        if (booking.getUser() != null) {
+            if (!isSignedIn(authentication)) {
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED", "Sign in to access this booking.");
+            }
+            if (!booking.getUser().getEmail().equalsIgnoreCase(authentication.getName())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "BOOKING_FORBIDDEN", "Booking access denied.");
+            }
+        } else {
+            if (guestProof == null || guestProof.isBlank()) {
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "GUEST_PROOF_REQUIRED",
+                        "Guest booking proof is required.");
+            }
+            if (!guestBookingProofService.isValid(guestProof, booking.getId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "GUEST_PROOF_INVALID",
+                        "Guest booking proof is invalid or expired.");
+            }
+        }
+    }
 
     // ----------------------------------------------------------------
     // API 3: POST /api/bookings/calculate-price
@@ -45,11 +109,9 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public PriceCalculateResponse calculatePrice(PriceCalculateRequest request) throws Exception {
 
-        Showtime showtime = showtimeRepository.findById(request.getShowtimeId())
-                .orElseThrow(() -> new Exception("Không tìm thấy suất chiếu!"));
-
-        int seatCount = request.getSeatIds().size();
-        if (seatCount == 0) throw new Exception("Chưa chọn ghế nào!");
+        SeatSelection selection = validateSelection(request.getShowtimeId(), request.getSeatIds());
+        Showtime showtime = selection.showtime();
+        int seatCount = selection.seats().size();
 
         BigDecimal pricePerSeat = showtime.getPrice();
         BigDecimal subtotal = pricePerSeat.multiply(BigDecimal.valueOf(seatCount));
@@ -64,8 +126,8 @@ public class BookingServiceImpl implements BookingService {
 
             // Kiểm tra đơn hàng tối thiểu
             if (voucher.getMinOrderValue() != null && subtotal.compareTo(voucher.getMinOrderValue()) < 0) {
-                throw new Exception("Đơn hàng phải đạt tối thiểu "
-                        + voucher.getMinOrderValue() + "đ để dùng mã này!");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "VOUCHER_MINIMUM",
+                        "Order does not meet the voucher minimum.");
             }
 
             discountAmount = computeDiscount(voucher, subtotal);
@@ -90,33 +152,25 @@ public class BookingServiceImpl implements BookingService {
     // BƯỚC 1: KHÓA GHẾ (HOLD) - Tạo Booking PENDING
     // ----------------------------------------------------------------
     @Transactional(rollbackFor = Exception.class)
-    public BookingResponse holdBooking(BookingRequest request) throws Exception {
+    public BookingResponse holdBooking(BookingRequest request, Authentication authentication) throws Exception {
 
         pendingBookingExpirationService.expireStalePendingBookings();
-
-        if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
-            throw new Exception("Chưa chọn ghế nào!");
-        }
-        Set<Integer> uniqueSeatIds = new HashSet<>(request.getSeatIds());
-        if (uniqueSeatIds.size() != request.getSeatIds().size()) {
-            throw new Exception("Danh sách ghế bị trùng. Vui lòng chọn lại ghế!");
-        }
+        SeatSelection selection = validateSelection(request.getShowtimeId(), request.getSeatIds());
+        Showtime showtime = selection.showtime();
 
         User user = null;
-        if (request.getUserId() != null) {
-            user = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new Exception("Không tìm thấy người dùng!"));
+        if (isSignedIn(authentication)) {
+            user = userRepository.findByEmail(authentication.getName())
+                    .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "AUTH_REQUIRED",
+                            "Authenticated user was not found."));
         }
-
-        Showtime showtime = showtimeRepository.findById(request.getShowtimeId())
-                .orElseThrow(() -> new Exception("Không tìm thấy suất chiếu!"));
 
         boolean isSeatTaken = bookingDetailRepository.existsByShowtimeIdAndSeatIdIn(
                 request.getShowtimeId(),
                 request.getSeatIds()
         );
         if (isSeatTaken) {
-            throw new Exception("Ghế bạn chọn đã có người đặt. Vui lòng chọn ghế khác!");
+            throw new ApiException(HttpStatus.CONFLICT, "SEAT_UNAVAILABLE", "A selected seat is unavailable.");
         }
 
         BigDecimal pricePerSeat = showtime.getPrice();
@@ -131,10 +185,7 @@ public class BookingServiceImpl implements BookingService {
         Booking savedBooking = bookingRepository.save(newBooking);
 
         List<BookingDetail> details = new ArrayList<>();
-        for (Integer seatId : uniqueSeatIds) {
-            Seat seat = seatRepository.findById(seatId)
-                    .orElseThrow(() -> new Exception("Không tìm thấy ghế ID: " + seatId));
-
+        for (Seat seat : selection.seats()) {
             BookingDetail detail = new BookingDetail();
             detail.setBooking(savedBooking);
             detail.setShowtime(showtime);
@@ -145,14 +196,15 @@ public class BookingServiceImpl implements BookingService {
         try {
             bookingDetailRepository.saveAll(details);
         } catch (DataIntegrityViolationException e) {
-            throw new Exception("Ghế bạn chọn vừa có người khác giữ. Vui lòng tải lại và chọn ghế khác!");
+            throw new ApiException(HttpStatus.CONFLICT, "SEAT_UNAVAILABLE", "A selected seat is unavailable.");
         }
 
         return new BookingResponse(
                 savedBooking.getId(),
                 "Khóa ghế thành công. Vui lòng thanh toán trong "
                         + PendingBookingExpirationService.PENDING_PAYMENT_DEADLINE_MINUTES + " phút.",
-                subtotal
+                subtotal,
+                user == null ? guestBookingProofService.issue(savedBooking.getId()) : null
         );
     }
 
@@ -160,14 +212,26 @@ public class BookingServiceImpl implements BookingService {
     // BƯỚC 2: THANH TOÁN (PAY) - Xử lý Voucher và Thanh toán
     // ----------------------------------------------------------------
     @Transactional(rollbackFor = Exception.class)
-    public BookingResponse payBooking(Integer bookingId, com.cinema.movie_booking.dto.PayBookingRequest request) throws Exception {
+    public BookingResponse payBooking(Integer bookingId, com.cinema.movie_booking.dto.PayBookingRequest request,
+                                      Authentication authentication, String guestProof) throws Exception {
         pendingBookingExpirationService.expireStalePendingBookings();
 
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new Exception("Không tìm thấy đơn hàng ID: " + bookingId));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOOKING_NOT_FOUND", "Booking not found."));
+        authorizeBooking(booking, authentication, guestProof);
 
         if (!"PENDING".equalsIgnoreCase(booking.getStatus())) {
-            throw new Exception("Đơn hàng này không ở trạng thái chờ thanh toán!");
+            throw new ApiException(HttpStatus.CONFLICT, "BOOKING_NOT_PENDING", "Booking is not pending payment.");
+        }
+        if (request.getPaymentMethod() == null
+                || !Set.of("MOMO", "CARD").contains(request.getPaymentMethod().toUpperCase())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAYMENT_METHOD", "Payment method is invalid.");
+        }
+        if (booking.getUser() == null && (request.getGuestEmail() == null || request.getGuestEmail().isBlank())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "GUEST_EMAIL_REQUIRED", "Guest email is required.");
+        }
+        if (booking.getUser() != null && request.getGuestEmail() != null && !request.getGuestEmail().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Guest email is not used for account bookings.");
         }
 
         // Tạm tính giá
@@ -180,12 +244,13 @@ public class BookingServiceImpl implements BookingService {
 
             if (usedVoucher.getUsageLimit() != null
                     && usedVoucher.getUsedCount() >= usedVoucher.getUsageLimit()) {
-                throw new Exception("Mã giảm giá đã hết lượt sử dụng!");
+                throw new ApiException(HttpStatus.CONFLICT, "VOUCHER_EXHAUSTED", "Voucher usage limit reached.");
             }
 
             if (usedVoucher.getMinOrderValue() != null
                     && subtotal.compareTo(usedVoucher.getMinOrderValue()) < 0) {
-                throw new Exception("Đơn hàng phải đạt tối thiểu " + usedVoucher.getMinOrderValue() + "đ!");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "VOUCHER_MINIMUM",
+                        "Order does not meet the voucher minimum.");
             }
 
             discountAmount = computeDiscount(usedVoucher, subtotal);
@@ -198,8 +263,8 @@ public class BookingServiceImpl implements BookingService {
 
         BigDecimal finalTotal = subtotal.subtract(discountAmount).max(BigDecimal.ZERO);
         booking.setTotalPrice(finalTotal);
-        if (request.getGuestEmail() != null && !request.getGuestEmail().isBlank()) {
-            booking.setGuestEmail(request.getGuestEmail());
+        if (booking.getUser() == null) {
+            booking.setGuestEmail(request.getGuestEmail().trim());
         }
 
         if (booking.getUser() != null) {
@@ -211,7 +276,7 @@ public class BookingServiceImpl implements BookingService {
 
         Payment payment = new Payment();
         payment.setAmount(finalTotal);
-        payment.setPaymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : "MOMO");
+        payment.setPaymentMethod(request.getPaymentMethod().toUpperCase());
         payment.setStatus("SUCCESS");
         payment.setBooking(booking);
         paymentRepository.save(payment);
@@ -226,10 +291,11 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(rollbackFor = Exception.class)
     public BookingResponse confirmBooking(Integer bookingId) throws Exception {
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new Exception("Không tìm thấy đơn hàng ID: " + bookingId));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOOKING_NOT_FOUND", "Booking not found."));
 
         if (!"AWAITING_CONFIRMATION".equalsIgnoreCase(booking.getStatus())) {
-            throw new Exception("Đơn hàng này không ở trạng thái chờ xác nhận!");
+            throw new ApiException(HttpStatus.CONFLICT, "BOOKING_NOT_AWAITING_CONFIRMATION",
+                    "Booking is not awaiting confirmation.");
         }
 
         booking.setStatus("PAID");
@@ -291,7 +357,8 @@ public class BookingServiceImpl implements BookingService {
         return voucherRepository
                 .findByCodeIgnoreCaseAndStatusAndStartDateBeforeAndEndDateAfter(
                         code, "ACTIVE", now, now)
-                .orElseThrow(() -> new Exception("Mã giảm giá '" + code + "' không hợp lệ hoặc đã hết hạn!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "VOUCHER_INVALID",
+                        "Voucher is invalid or expired."));
     }
 
     // ----------------------------------------------------------------
@@ -357,19 +424,22 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public Booking getBookingById(Integer id) throws Exception {
-        return bookingRepository.findById(id)
-                .orElseThrow(() -> new Exception("Không tìm thấy đơn hàng ID: " + id));
+    public Booking getBookingById(Integer id, Authentication authentication, String guestProof) throws Exception {
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOOKING_NOT_FOUND", "Booking not found."));
+        authorizeBooking(booking, authentication, guestProof);
+        return booking;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void cancelBooking(Integer id) throws Exception {
+    public void cancelBooking(Integer id, Authentication authentication, String guestProof) throws Exception {
         Booking booking = bookingRepository.findById(id)
-                .orElseThrow(() -> new Exception("Không tìm thấy đơn hàng ID: " + id));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOOKING_NOT_FOUND", "Booking not found."));
+        authorizeBooking(booking, authentication, guestProof);
 
         if (!"PENDING".equalsIgnoreCase(booking.getStatus())) {
-            throw new Exception("Chỉ có thể hủy đơn đặt vé đang chờ thanh toán.");
+            throw new ApiException(HttpStatus.CONFLICT, "BOOKING_NOT_PENDING", "Only pending bookings can be cancelled.");
         }
 
         booking.setStatus("CANCELLED");

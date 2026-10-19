@@ -8,6 +8,8 @@ import com.cinema.movie_booking.entity.User;
 import com.cinema.movie_booking.repository.RoleRepository;
 import com.cinema.movie_booking.repository.UserRepository;
 import com.cinema.movie_booking.security.JwtUtils;
+import com.cinema.movie_booking.web.ApiException;
+import org.springframework.http.HttpStatus;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -44,15 +46,15 @@ public class AuthServiceImpl {
         String password = request.getPassword() != null ? request.getPassword() : "";
 
         if (!phone.matches("\\d{10}")) {
-            throw new Exception("Số điện thoại phải gồm đúng 10 chữ số.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Phone must have 10 digits.");
         }
         if (password.length() < 6) {
-            throw new Exception("Mật khẩu phải có ít nhất 6 ký tự.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "Password is too short.");
         }
 
         // 1. Kiểm tra Email đã tồn tại chưa
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new Exception("Email này đã được sử dụng!");
+            throw new ApiException(HttpStatus.CONFLICT, "EMAIL_IN_USE", "Email is already in use.");
         }
 
         // 2. Tìm Role CUSTOMER mặc định (Đảm bảo trong DB bảng roles đã có dòng 'CUSTOMER')

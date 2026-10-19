@@ -21,17 +21,16 @@ export interface PriceCalculateResponse {
 }
 
 export interface BookingRequest {
-  userId?: number;
   showtimeId: number;
   seatIds: number[];
-  voucherCode?: string;
-  paymentMethod?: string;
 }
 
 export interface BookingResponse {
   bookingId: number;
   message: string;
-  totalAmount: number;
+  totalPrice: number;
+  /** Short-lived capability; returned only for guest bookings. Keep it out of persistent storage. */
+  guestProof?: string | null;
 }
 
 export interface BookingHistoryDTO {
@@ -103,8 +102,10 @@ export const bookingService = {
   },
 
   // Giai đoạn 2: Thanh toán Hóa đơn PENDING -> AWAITING_CONFIRMATION
-  payBooking: async (bookingId: number, request: PayBookingRequest): Promise<BookingResponse> => {
-    const response = await apiClient.post<BookingResponse>(`/bookings/${bookingId}/pay`, request);
+  payBooking: async (bookingId: number, request: PayBookingRequest, guestProof?: string): Promise<BookingResponse> => {
+    const response = await apiClient.post<BookingResponse>(`/bookings/${bookingId}/pay`, request, {
+      headers: guestProof ? { 'X-Guest-Booking-Proof': guestProof } : undefined,
+    });
     return response.data;
   },
 
@@ -114,14 +115,22 @@ export const bookingService = {
     return response.data;
   },
 
-  getBookingDetail: async (bookingId: number): Promise<BookingDetailResponse> => {
-    const response = await apiClient.get<BookingDetailResponse>(`/bookings/${bookingId}`);
+  getBookingDetail: async (bookingId: number, guestProof?: string): Promise<BookingDetailResponse> => {
+    const response = await apiClient.get<BookingDetailResponse>(`/bookings/${bookingId}`, {
+      headers: guestProof ? { 'X-Guest-Booking-Proof': guestProof } : undefined,
+    });
     return response.data;
   },
 
+  cancelBooking: async (bookingId: number, guestProof?: string): Promise<void> => {
+    await apiClient.delete(`/bookings/${bookingId}`, {
+      headers: guestProof ? { 'X-Guest-Booking-Proof': guestProof } : undefined,
+    });
+  },
+
   // Lấy lịch sử đặt vé của user
-  getMyBookings: async (email: string): Promise<BookingHistoryDTO[]> => {
-    const response = await apiClient.get<BookingHistoryDTO[]>(`/users/me/bookings?email=${encodeURIComponent(email)}`);
+  getMyBookings: async (): Promise<BookingHistoryDTO[]> => {
+    const response = await apiClient.get<BookingHistoryDTO[]>('/users/me/bookings');
     return response.data;
   },
 

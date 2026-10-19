@@ -90,8 +90,8 @@ export default function MyTickets() {
   ticketsRef.current = tickets;
 
   const loadTickets = useCallback(
-    (email: string) =>
-      bookingService.getMyBookings(email).then((data) => {
+    (_email: string) =>
+      bookingService.getMyBookings().then((data) => {
         const sorted = [...data].sort(sortByNewestBooked);
         setTickets(sorted);
       }),
@@ -201,7 +201,7 @@ export default function MyTickets() {
         },
       });
     } catch (error: any) {
-      alert(error?.response?.data || error?.message || 'Không thể mở lại trang thanh toán. Vui lòng thử lại.');
+      alert(error?.response?.data?.message || error?.message || 'Không thể mở lại trang thanh toán. Vui lòng thử lại.');
     } finally {
       setContinuingId(null);
     }

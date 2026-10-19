@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import { movieService, MovieDto } from '../../services/movieService';
-import { AuthSession, CURRENT_USER_STORAGE_KEY } from '../../utils/authSession';
+import { AuthSession, CURRENT_USER_STORAGE_KEY, isAdminSession } from '../../utils/authSession';
 
 type LoginForm = {
   email: string;
@@ -123,16 +123,13 @@ export default function Header() {
       setIsLoginOpen(false);
       setLoginForm({ email: '', password: '' });
 
-      const raw = data.roleId ?? data.role_id;
-      const roleId = Number(raw);
-
-      if (roleId === 2) {
+      if (isAdminSession(data)) {
         navigate('/admin', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     } catch (error: any) {
-      setLoginError(error.response?.data || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      setLoginError(error.response?.data?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setIsLoginLoading(false);
     }
@@ -167,7 +164,7 @@ export default function Header() {
       setIsRegisterOpen(false);
       setIsLoginOpen(true);
     } catch (error: any) {
-      setRegisterError(error.response?.data || 'Tạo tài khoản thất bại. Email có thể đã tồn tại.');
+      setRegisterError(error.response?.data?.message || 'Tạo tài khoản thất bại. Email có thể đã tồn tại.');
     } finally {
       setIsRegisterLoading(false);
     }

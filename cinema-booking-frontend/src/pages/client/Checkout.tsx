@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingService, PriceCalculateResponse } from '../../services/bookingService';
 import { voucherService, VoucherDTO } from '../../services/voucherService';
-import { CURRENT_USER_STORAGE_KEY, AuthSession } from '../../utils/authSession';
 import VoucherModal from '../../features/checkout/components/VoucherModal';
 import PaymentMethods, { PaymentMethod } from '../../features/checkout/components/PaymentMethods';
 
@@ -15,6 +14,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const booking = location.state?.booking;
   const selectedSeats = location.state?.selectedSeats as {id: number, seatNumber: string}[] | undefined;
+  const guestProof = location.state?.guestProof as string | undefined;
 
   const [priceData, setPriceData] = useState<PriceCalculateResponse | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -24,13 +24,6 @@ export default function Checkout() {
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [vouchers, setVouchers] = useState<VoucherDTO[]>([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
-
-  // Lấy User từ local storage
-  const rawCurrentUser = localStorage.getItem(CURRENT_USER_STORAGE_KEY);
-  let user: AuthSession & { id?: number } | null = null;
-  if (rawCurrentUser) {
-    try { user = JSON.parse(rawCurrentUser); } catch {}
-  }
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -55,7 +48,7 @@ export default function Checkout() {
       });
       setPriceData(resp);
     } catch (error: any) {
-      setErrorMsg(error.response?.data || "Không thể tính phí đặt vé hoặc mã giảm giá không hợp lệ");
+      setErrorMsg(error.response?.data?.message || "Không thể tính phí đặt vé hoặc mã giảm giá không hợp lệ");
     } finally {
       setPriceLoading(false);
     }
@@ -76,7 +69,7 @@ export default function Checkout() {
   };
 
   const handlePayment = async () => {
-    if (!user || (!user.id && !(user as any).userId)) {
+    if (guestProof) {
       if (!guestEmail || !/^\S+@\S+\.\S+$/.test(guestEmail)) {
         setErrorMsg("Vui lòng nhập địa chỉ email hợp lệ để nhận thông tin vé.");
         return;
@@ -97,14 +90,14 @@ export default function Checkout() {
       const resp = await bookingService.payBooking(bookingId, {
         voucherCode: voucherCodeToPay,
         paymentMethod: paymentMethod.toUpperCase(),
-        guestEmail: (!user || (!user.id && !(user as any).userId)) ? guestEmail : undefined,
-      });
+        guestEmail: guestProof ? guestEmail : undefined,
+      }, guestProof);
       navigate('/booking-success', { 
         replace: true,
         state: { bookingResult: resp, booking, selectedSeats }
       });
     } catch (error: any) {
-      setErrorMsg(error.response?.data || "Thanh toán thất bại! Vui lòng thử lại sau.");
+      setErrorMsg(error.response?.data?.message || "Thanh toán thất bại! Vui lòng thử lại sau.");
     } finally {
       setIsSubmitting(false);
     }
@@ -206,7 +199,7 @@ export default function Checkout() {
               </div>
 
               {/* Guest Email Contact Info */}
-              {(!user || (!user.id && !(user as any).userId)) && (
+              {guestProof && (
                 <div className="rounded-2xl p-5 border border-outline-variant/20 bg-surface-container-low">
                   <h3 className="text-lg font-headline font-bold text-on-surface mb-4">Thông tin liên hệ (Bắt buộc)</h3>
                   <div>

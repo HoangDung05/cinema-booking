@@ -19,7 +19,7 @@ cinema-booking/
 ├── cinema-booking-backend/   # API Spring Boot, Maven Wrapper
 ├── cinema-booking-frontend/  # Ứng dụng React/Vite
 ├── docker-compose.yml        # MySQL, backend, frontend
-├── init.sql                  # Cấu trúc và dữ liệu mẫu MySQL
+├── init.sql                  # Cấu trúc và dữ liệu demo tổng hợp cho MySQL local
 ├── railway_demo.sql          # Schema và dữ liệu giả lập an toàn cho Railway
 └── README.md
 ```
@@ -33,18 +33,17 @@ cinema-booking/
 
 > **Lưu ý về thanh toán:** nút thanh toán hiện gọi API để ghi nhận phương thức thanh toán và trạng thái thành công trong cơ sở dữ liệu. Dự án chưa tích hợp giao dịch thật với MoMo hoặc đơn vị phát hành thẻ.
 
-## Tài khoản thử nghiệm
+## Tài khoản thử nghiệm local
 
-Sau khi import dữ liệu mẫu từ `init.sql`, bạn có thể đăng nhập bằng các tài khoản sau:
+`init.sql` và `railway_demo.sql` không tạo tài khoản hoặc mật khẩu cố định. Sau khi chạy backend, đăng ký một tài khoản khách hàng qua giao diện hoặc `POST /api/auth/register`. Để thử trang admin **chỉ trên database local**, đăng ký một tài khoản khác rồi đổi quyền bằng MySQL Workbench/CLI, thay địa chỉ email ví dụ bằng email bạn vừa đăng ký:
 
-| Vai trò | Tên đăng nhập | Mật khẩu |
-| --- | --- | --- |
-| Khách hàng | `dung@gmail.com` | `123456` |
-| Admin | `admin@gmail.com` | `123456` |
+```sql
+UPDATE users
+SET role_id = (SELECT id FROM roles WHERE name = 'ADMIN')
+WHERE email = 'your-local-admin@example.com';
+```
 
-Các tài khoản này chỉ dùng để thử nghiệm; hãy đổi mật khẩu hoặc xóa chúng trước khi triển khai công khai.
-
-`railway_demo.sql` không tạo tài khoản nào. Hai tài khoản trên chỉ có trong dữ liệu local từ `init.sql`.
+Đăng xuất và đăng nhập lại để frontend nhận quyền mới. Không dùng tài khoản quản trị thử nghiệm hoặc mật khẩu dùng lại trên môi trường công khai.
 
 ## Chạy trực tiếp trên máy (không dùng Docker)
 
@@ -56,7 +55,7 @@ Các tài khoản này chỉ dùng để thử nghiệm; hãy đổi mật khẩ
 
 ### 1. Chuẩn bị database
 
-Tạo database `cinema_booking`. Để có dữ liệu mẫu, import `init.sql` vào database đó bằng MySQL Workbench hoặc MySQL CLI. Ví dụ trong MySQL CLI:
+Tạo database `cinema_booking` **mới và trống**. Để có dữ liệu mẫu tổng hợp, import `init.sql` vào database đó bằng MySQL Workbench hoặc MySQL CLI. Ví dụ trong MySQL CLI:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS cinema_booking CHARACTER SET utf8mb4;
@@ -64,17 +63,21 @@ USE cinema_booking;
 SOURCE D:/Project/cinema-booking/init.sql;
 ```
 
-Thay đường dẫn `SOURCE` nếu dự án nằm ở vị trí khác. File SQL này chứa lệnh xóa và tạo lại bảng; **không import vào database đang có dữ liệu cần giữ**. Nếu chỉ tạo database trống, Hibernate (`ddl-auto: update`) sẽ tạo/cập nhật bảng khi backend chạy, nhưng sẽ không có dữ liệu mẫu.
+Thay đường dẫn `SOURCE` nếu dự án nằm ở vị trí khác. File SQL tạo 11 bảng và dữ liệu phim/rạp/phòng/ghế/suất chiếu giả lập; **chỉ import một lần vào database trống**. Nó không xóa bảng hiện có, nhưng dữ liệu có ID cố định nên import vào database đã có dữ liệu có thể gây trùng khóa hoặc kết quả không mong muốn. Nếu chỉ tạo database trống, Hibernate (`ddl-auto: update`) sẽ tạo/cập nhật bảng khi backend chạy, nhưng sẽ không có dữ liệu mẫu.
 
 ### 2. Chạy backend
 
-Để kiểm tra và đóng gói backend, chạy trong `cinema-booking-backend`:
+Để kiểm tra và đóng gói backend, chọn JDK 21 cho terminal rồi chạy trong `cinema-booking-backend` (thay đường dẫn JDK theo máy của bạn):
 
 ```powershell
+$env:JAVA_HOME = 'C:\path\to\jdk-21'
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+java -version
+.\mvnw.cmd clean test
 .\mvnw.cmd clean package
 ```
 
-Bài test dùng database H2 tạm, nên lệnh build này không cần MySQL hoặc file `.env`. File WAR được tạo trong `target/`. Khi **chạy ứng dụng thật**, backend vẫn cần `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` và `JWT_SECRET`.
+Bài test dùng database H2 tạm, nên các lệnh này không cần MySQL hoặc file `.env`. `clean` loại bỏ các class cũ trong `target/`; Surefire nạp sẵn Byte Buddy agent để tránh treo ở bước gắn agent động trên một số máy Windows. File WAR được tạo trong `target/`. Khi **chạy ứng dụng thật**, backend vẫn cần `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` và `JWT_SECRET`.
 
 Mở PowerShell tại thư mục gốc dự án:
 
@@ -112,7 +115,7 @@ Cần cài Docker Desktop (hoặc Docker Engine với Compose) và khởi độn
 
 ```powershell
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-# Điền MYSQL_ROOT_PASSWORD và JWT_SECRET vào .env trước khi chạy.
+# Điền MYSQL_ROOT_PASSWORD mạnh và JWT_SECRET riêng vào .env trước khi chạy.
 docker compose up -d --build
 docker compose ps
 ```
@@ -128,7 +131,7 @@ Compose dùng tài khoản MySQL `root` với mật khẩu lấy từ `.env` và
 
 ## Nạp dữ liệu demo vào MySQL trên Railway
 
-Chỉ dùng [railway_demo.sql](railway_demo.sql) cho **database Railway mới, trống**. File này tạo 11 bảng và dữ liệu giả lập: 3 phim, 1 rạp, 3 phòng, 144 ghế, 3 suất chiếu/ngày trong 365 ngày tính từ ngày import. Bảng `users`, `bookings` và `payments` ban đầu trống. Không import `init.sql` lên Railway vì file local đó chứa thông tin người dùng, lịch sử vé và lịch chiếu cũ.
+Chỉ dùng [railway_demo.sql](railway_demo.sql) cho **database Railway mới, trống**. File này tạo 11 bảng và dữ liệu giả lập: 3 phim, 1 rạp, 3 phòng, 144 ghế, 3 suất chiếu/ngày trong 365 ngày tính từ ngày import. Bảng `users`, `bookings` và `payments` ban đầu trống. `init.sql` hiện cũng chỉ chứa dữ liệu tổng hợp cho local; không import bất kỳ script nào lên database Railway đang có dữ liệu.
 
 1. Trong Railway, mở service **MySQL → Variables**. Kiểm tra có `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`. Không sao chép giá trị bí mật vào Git hoặc tin nhắn.
 2. Vào **Settings → Networking**, thêm **Public Access** cho MySQL. Railway tạo `MYSQL_PUBLIC_URL` với host và cổng TCP công khai. Dùng host/cổng trong URL đó cho kết nối từ máy tính; `MYSQLHOST`/`MYSQLPORT` nội bộ chỉ dùng giữa các service Railway.
@@ -172,6 +175,6 @@ Xem toàn bộ endpoint và cấu trúc request/response trong Swagger UI. Các 
 - Cổng backend, context path và kết nối MySQL nằm trong `cinema-booking-backend/src/main/resources/application.yaml`.
 - Backend đọc `CORS_ALLOWED_ORIGINS` dưới dạng danh sách origin cách nhau bằng dấu phẩy. Mặc định chỉ cho phép frontend local. Khi có domain Vercel, đặt biến này trong **Variables** của service Backend trên Railway, ví dụ `https://ten-du-an.vercel.app` (không thêm `/api` hoặc dấu `/` cuối); nếu cần nhiều origin, phân tách bằng dấu phẩy. Frontend gửi JWT qua header `Authorization`, không dùng cookie.
 - Chatbot đọc khóa Gemini từ biến môi trường `GEMINI_API_KEY`. Khi chưa có khóa, các phần khác vẫn chạy và chatbot trả thông báo chưa được cấu hình. Khóa từng có trong mã nguồn cần được thu hồi trước khi triển khai công khai.
-- Cấu hình tài khoản MySQL trong dự án dành cho môi trường phát triển. Hãy đổi thông tin đăng nhập và cấu hình bảo mật trước khi triển khai công khai.
-- Dữ liệu mẫu trong `init.sql` có các suất chiếu theo ngày cố định; nếu không còn suất chiếu sắp tới, hãy tạo suất chiếu mới trong trang quản trị.
+- Cấu hình tài khoản MySQL trong dự án dành cho môi trường phát triển. `.env.example` để trống mật khẩu; hãy tạo mật khẩu riêng và không commit `.env`.
+- Dữ liệu mẫu trong `init.sql` tạo suất chiếu trong 365 ngày kể từ ngày import. Nếu lịch demo đã hết hạn, tạo suất chiếu mới trong trang quản trị trên database local mới.
 - Nếu gặp lỗi cổng 8080 hoặc 3000 đã được sử dụng, hãy dừng tiến trình đang dùng cổng đó trước khi chạy lại. Khi chạy Docker, cổng 80 và 3307 cũng cần còn trống.

@@ -1,6 +1,6 @@
 export const CURRENT_USER_STORAGE_KEY = 'currentUser';
 
-/** Dữ liệu sau đăng nhập — roleId do backend trả về (bảng users.role_id) */
+/** Dữ liệu sau đăng nhập — role name do backend trả về quyết định quyền UI. */
 export type AuthSession = {
   token: string;
   type?: string;
@@ -39,5 +39,5 @@ export function readAuthSession(): AuthSession | null {
 }
 
 export function isAdminSession(session: AuthSession | null): boolean {
-  return resolveRoleId(session) === 2;
+  return session?.role?.toUpperCase() === 'ADMIN';
 }

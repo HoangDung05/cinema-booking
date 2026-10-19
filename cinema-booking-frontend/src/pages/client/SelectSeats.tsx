@@ -66,6 +66,10 @@ export default function SelectSeats() {
 
     setSelectedSeats((prev) => {
       if (prev.find(s => s.id === seatObj.id)) return prev.filter((s) => s.id !== seatObj.id);
+      if (prev.length >= 10) {
+        alert('Bạn chỉ có thể chọn tối đa 10 ghế.');
+        return prev;
+      }
       return [...prev, { id: seatObj.id, seatNumber: seatObj.seatNumber }];
     });
   };
@@ -286,17 +290,9 @@ export default function SelectSeats() {
             <button 
               onClick={async () => {
                 if (selectedSeats.length === 0 || isHoldingSeats) return;
-                const userRaw = localStorage.getItem('currentUser');
-                let realUserId: number | undefined = undefined;
-                if (userRaw) {
-                  const user = JSON.parse(userRaw);
-                  realUserId = user.id || user.userId;
-                }
-                
                 try {
                   setIsHoldingSeats(true);
                   const res = await bookingService.holdBooking({
-                    userId: realUserId,
                     showtimeId: booking!.showtimeId,
                     seatIds: selectedSeatsSorted.map(s => s.id)
                   });
@@ -305,7 +301,8 @@ export default function SelectSeats() {
                     state: {
                       booking,
                       selectedSeats: selectedSeatsSorted,
-                      bookingId: res.bookingId
+                      bookingId: res.bookingId,
+                      guestProof: res.guestProof ?? undefined,
                     }
                   });
                 } catch (error: any) {

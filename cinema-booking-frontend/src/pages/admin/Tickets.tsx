@@ -85,7 +85,7 @@ export default function Tickets() {
       await bookingService.confirmBooking(id);
       setRows(prev => prev.map(r => r.booking_id === id ? { ...r, status: 'PAID' } : r));
     } catch (e: any) {
-      alert('Lỗi xác nhận: ' + (e.response?.data || e.message));
+      alert('Lỗi xác nhận: ' + (e.response?.data?.message || e.message));
     }
   };
 

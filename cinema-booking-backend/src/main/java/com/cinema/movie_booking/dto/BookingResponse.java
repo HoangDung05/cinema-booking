@@ -13,4 +13,9 @@ public class BookingResponse {
     private Integer bookingId;
     private String message;      // VD: "Đặt vé thành công! Vui lòng tiến hành thanh toán."
     private BigDecimal totalPrice;
+    private String guestProof;
+
+    public BookingResponse(Integer bookingId, String message, BigDecimal totalPrice) {
+        this(bookingId, message, totalPrice, null);
+    }
 }

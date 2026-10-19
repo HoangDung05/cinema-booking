@@ -46,7 +46,11 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    // A guest booking can return 401 for a missing proof; that must not log out
+    // an unrelated signed-in account.
+    if (error?.response?.status === 401
+      && error?.response?.data?.message === 'Unauthorized'
+      && error?.config?.headers?.Authorization) {
       localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
     }
     return Promise.reject(error);
